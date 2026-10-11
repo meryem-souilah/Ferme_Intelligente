@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Supervision Ferme Intelligente</title>
+<style>body{margin:0}</style>
+</head>
+<body>
+<style>
+/* Concept : une application mobile de supervision (cadre de téléphone) à gauche, et le banc de simulation de la ferme (vue de dessus, clôture, capteurs) à droite. */
+:root{
+  --bg:#e7eeeb; --frame:#17211d; --app:#f3f7f5; --surface:#ffffff; --surface-2:#eaf0ed; --ink:#10201a; --ink-2:#56665e; --line:#d6e0db;
+  --accent:#0d8a5b; --accent-ink:#ffffff; --water:#1b78d6; --ok:#12875a; --warn:#b36a00; --crit:#d1342d; --info:#1b78d6;
+  --ok-bg:#dcf2e7; --warn-bg:#faebcf; --crit-bg:#fbdedc; --info-bg:#dbe9fa;
+  --shadow:0 1px 2px rgba(16,32,26,.06),0 4px 14px rgba(16,32,26,.06);
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#080d0b; --frame:#2a3832; --app:#0e1512; --surface:#15201b; --surface-2:#1d2b25; --ink:#e8f1ec; --ink-2:#9bafa4; --line:#26362e;
+  --accent:#3ddc97; --accent-ink:#04150d; --water:#5aa9f0; --ok:#3ddc97; --warn:#f0b24a; --crit:#ff6b62; --info:#6db3f2;
+  --ok-bg:#133024; --warn-bg:#33270f; --crit-bg:#3b1816; --info-bg:#132a40; --shadow:none; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#080d0b; --frame:#2a3832; --app:#0e1512; --surface:#15201b; --surface-2:#1d2b25; --ink:#e8f1ec; --ink-2:#9bafa4; --line:#26362e;
+  --accent:#3ddc97; --accent-ink:#04150d; --water:#5aa9f0; --ok:#3ddc97; --warn:#f0b24a; --crit:#ff6b62; --info:#6db3f2;
+  --ok-bg:#133024; --warn-bg:#33270f; --crit-bg:#3b1816; --info-bg:#132a40; --shadow:none; color-scheme:dark;}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.4;padding-inline:16px;padding-block:20px 36px}
+*{box-sizing:border-box}
+h1,h2,h3,h4,p{margin:0}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.page{max-width:1280px;margin-inline:auto;display:grid;grid-template-columns:minmax(0,1fr);gap:22px;align-items:start}
+@media (min-width:1000px){.page{grid-template-columns:420px minmax(0,1fr)}}
+.col-title{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-2);margin:0 0 10px 4px;font-weight:600}
+
+/* téléphone */
+.phone{background:var(--app);border:10px solid var(--frame);border-radius:42px;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow);width:100%;max-width:440px;margin-inline:auto;min-width:0}
+@media (min-width:1000px){.phone{height:820px;position:sticky;top:16px}}
+@media (max-width:520px){.phone{border-width:0;border-radius:22px}}
+.apphead{padding:18px 18px 12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.hl{display:flex;align-items:center;gap:10px;min-width:0}
+.hl svg{width:26px;height:26px;flex:none}
+.clock{font-size:2rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.dt{font-size:13px;color:var(--ink-2);margin-top:4px}
+.conn{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--ok-bg);color:var(--ink);border:1px solid var(--ok);white-space:nowrap}
+.conn svg{width:15px;height:15px}
+.conn.off{background:var(--surface-2);border-color:var(--ink-2)}
+.sync{font-size:11.5px;color:var(--ink-2);text-align:right;margin-top:4px}
+.appbody{flex:1;overflow-y:auto;padding:4px 16px 18px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.tab{display:flex;flex-direction:column;gap:12px}
+.tab[hidden]{display:none}
+.tabbar{display:flex;border-top:1px solid var(--line);background:var(--surface)}
+.tabbar button{flex:1;border:0;background:transparent;padding:10px 4px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer}
+.tabbar button svg{width:22px;height:22px}
+.tabbar button[aria-selected="true"]{color:var(--accent)}
+.tabbar .badge{position:relative}
+.tabbar .badge.on::after{content:"";position:absolute;top:-2px;right:-5px;width:9px;height:9px;border-radius:50%;background:var(--crit)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
+.card h3{font-size:.95rem;font-weight:600}
+.lbl{font-size:12px;color:var(--ink-2);font-weight:500}
+.banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:14px;border:1px solid;font-weight:600;font-size:14px}
+.banner .m{flex:1 1 180px;min-width:0}
+.banner.info{background:var(--info-bg);border-color:var(--info)}
+.banner.warn{background:var(--warn-bg);border-color:var(--warn)}
+.banner.crit{background:var(--crit-bg);border-color:var(--crit)}
+.banner .dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--info)}
+.banner.warn .dot{background:var(--warn)}
+.banner.crit .dot{background:var(--crit);animation:blink .6s steps(2) infinite}
+.banner button{border:1px solid var(--crit);background:var(--surface);border-radius:10px;padding:6px 12px;font-weight:600;cursor:pointer}
+.hero{display:flex;gap:14px;align-items:center}
+.drop{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);flex:none;transition:background .3s}
+.drop svg{width:38px;height:38px}
+.hero[data-s="on"] .drop{background:var(--info-bg);animation:pulse 1.6s ease-in-out infinite}
+.hero[data-s="paused"] .drop{background:var(--warn-bg)}
+.hero h2{font-size:1.25rem;font-weight:600}
+.hero p{font-size:13px;color:var(--ink-2);margin-top:2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--surface-2);font-size:12.5px;font-weight:500}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--ink-2)}
+.chip[data-s="on"] i{background:var(--ok)}.chip[data-s="blocked"] i{background:var(--warn)}.chip[data-s="alarm"] i{background:var(--crit)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{padding:12px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile.wide{grid-column:1/-1}
+.big .bt.wide{grid-column:1/-1}
+.tile .v{font-size:2rem;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.tile .v small{font-size:.95rem;font-weight:500;color:var(--ink-2);margin-left:2px}
+.tile .s{font-size:12.5px;color:var(--ink-2)}
+.tile[data-s="warn"]{border-color:var(--warn)}
+.tile[data-s="crit"]{border-color:var(--crit);background:var(--crit-bg)}
+.tile[data-s="info"]{border-color:var(--info);background:var(--info-bg)}
+.tile[data-s="ok"] .s{color:var(--ok)}
+.meter{position:relative;height:12px;border-radius:99px;background:var(--surface-2);margin:12px 0 6px}
+.meter .band{position:absolute;top:0;bottom:0;background:var(--ok-bg);border-left:2px solid var(--warn);border-right:2px solid var(--info)}
+.meter .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--water);transition:width .25s}
+.meter .pin{position:absolute;top:-4px;width:6px;height:20px;border-radius:3px;background:var(--ink);transform:translateX(-50%);transition:left .25s}
+.ml{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-2)}
+.seg{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:14px}
+.seg button{flex:1;border:0;background:transparent;padding:9px 4px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;min-width:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:disabled{opacity:.5;cursor:not-allowed}
+.big{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bt{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:18px;border:1px solid var(--line);background:var(--surface);cursor:pointer;text-align:left;box-shadow:var(--shadow)}
+.bt b{font-weight:600;font-size:15px}
+.bt .st{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.bt svg{width:28px;height:28px}
+.bt[aria-pressed="true"]{border-color:var(--ok);background:var(--ok-bg)}
+.bt:disabled{opacity:.5;cursor:not-allowed}
+.slot{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.slot:first-of-type{border-top:0}
+.slot .tm{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+input[type=time],select{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:6px 8px}
+.sw{position:relative;width:46px;height:28px;flex:none}
+.sw input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.sw span{position:absolute;inset:0;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);transition:background .2s}
+.sw span::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--ink-2);transition:transform .2s,background .2s}
+.sw input:checked+span{background:var(--accent);border-color:var(--accent)}
+.sw input:checked+span::after{transform:translateX(18px);background:var(--accent-ink)}
+.sw input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.sw input:disabled{cursor:not-allowed}
+.days{display:flex;gap:6px;margin-top:8px}
+.days button{flex:1;aspect-ratio:1;max-width:46px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer}
+.days button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.days button:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;flex-direction:column;gap:2px;margin-bottom:10px}
+.row .lab{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.row output{font-family:var(--mono);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:9px 14px;cursor:pointer;font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.sec-state{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dist{font-size:2.6rem;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.dist small{font-size:1rem;color:var(--ink-2);font-weight:500}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:var(--surface-2)}
+.pill.ok{background:var(--ok-bg)}.pill.crit{background:var(--crit-bg);animation:blink .8s steps(2) infinite}.pill.warn{background:var(--warn-bg)}.pill.off{background:var(--surface-2);color:var(--ink-2)}
+.animals{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.animals i{width:26px;height:18px;border-radius:50%;background:#f1efe8;border:1px solid #c2bdae;position:relative}
+.animals i::before{content:"";position:absolute;left:-5px;top:5px;width:9px;height:9px;border-radius:50%;background:#3b3a38}
+.animals i.empty{opacity:.18}
+.hist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.hist li{display:flex;gap:8px;font-size:13px}
+.hist time{font-family:var(--mono);color:var(--ink-2);flex:none}
+.hist li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ink-2);flex:none;margin-top:7px}
+.hist li.ok::before{background:var(--ok)}.hist li.warn::before{background:var(--warn)}.hist li.crit::before{background:var(--crit)}.hist li.info::before{background:var(--info)}
+.empty-note{color:var(--ink-2);font-size:13px;margin-top:8px}
+
+/* simulation */
+.sim{display:flex;flex-direction:column;gap:14px;min-width:0}
+.scene-wrap{border:1px solid var(--line);border-radius:18px;background:var(--surface);overflow:hidden;min-width:0;box-shadow:var(--shadow)}
+.scene-wrap.alarm{animation:glow .5s steps(2) infinite}
+.scene-scroll{overflow-x:auto}
+#scene{display:block;width:100%;min-width:760px;height:auto}
+.simcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
+.simcard h3{font-size:1rem;font-weight:600;margin-bottom:12px}
+.simgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 22px}
+.sim .seg button{font-size:13px;padding:7px 4px}
+.cap{font-size:12px;color:var(--ink-2);font-weight:500;margin:4px 0 6px}
+.chk{display:flex;gap:8px;align-items:center;margin:6px 0}
+.chk input{accent-color:var(--accent);width:17px;height:17px}
+
+.zlab rect{fill:var(--surface);stroke:var(--line);stroke-width:1}
+.zlab text{fill:var(--ink);font:500 11.5px var(--mono);text-anchor:middle;dominant-baseline:central}
+.zlab.warn rect{fill:var(--warn-bg);stroke:var(--warn)}
+.zlab.crit rect{fill:var(--crit-bg);stroke:var(--crit)}
+.zlab.ok rect{stroke:var(--ok)}
+.water{fill:none;stroke:#3aa0f0;stroke-width:3.5;stroke-linecap:round;stroke-dasharray:7 7;opacity:0;transition:opacity .3s}
+.water.on{opacity:1;animation:flow .55s linear infinite}
+.spin.on{transform-box:fill-box;transform-origin:center;animation:spin .45s linear infinite}
+.rl{animation:fall .65s linear infinite}
+.wave{fill:none;stroke:#7fc4ff;stroke-width:2;stroke-linecap:round;transform-box:fill-box;transform-origin:left center;animation:ping 1.9s ease-out infinite}
+.halo{fill:#ff3b30;opacity:0;transform-box:fill-box;transform-origin:center}
+.ringing .halo{animation:halo .35s ease-in-out infinite alternate}
+.alarm-tint{fill:#ff3b30;opacity:0}
+.ringing .alarm-tint{animation:tint .5s steps(2) infinite}
+.pulse-ring{fill:none;stroke:#ff3b30;stroke-width:2;opacity:0;transform-box:fill-box;transform-origin:center}
+.ringing .pulse-ring{animation:ringp 1s ease-out infinite}
+.visitor{transition:opacity .2s}
+.led-blink{animation:blink 1.4s steps(2) infinite}
+@keyframes flow{to{stroke-dashoffset:-16}}
+.links path{animation:flow .9s linear infinite}
+@media (prefers-reduced-motion:reduce){.links path{animation:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fall{from{transform:translate(0,-30px)}to{transform:translate(-40px,600px)}}
+@keyframes ping{0%{transform:scale(.5);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+@keyframes halo{from{opacity:.15;transform:scale(.9)}to{opacity:.95;transform:scale(1.9)}}
+@keyframes tint{50%{opacity:.14}}
+@keyframes ringp{0%{transform:scale(.6);opacity:.9}100%{transform:scale(2.2);opacity:0}}
+@keyframes blink{50%{opacity:.3}}
+@keyframes glow{50%{box-shadow:0 0 0 4px var(--crit)}}
+@keyframes pulse{50%{transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.water.on{stroke-dasharray:none}}
+</style>
+
+<div class="page">
+  <section aria-label="Application du fermier">
+    <p class="col-title">Application du fermier</p>
+    <div class="phone" id="phone">
+      <div class="apphead">
+        <div>
+          <div class="hl"><svg id="clockIcon" viewBox="0 0 24 24" aria-hidden="true"></svg><div class="clock" id="aTime">07:30</div></div>
+          <div class="dt" id="aDate"></div>
+        </div>
+        <div style="text-align:right">
+          <span class="conn" id="aConn"></span>
+          <div class="sync" id="aSync"></div>
+        </div>
+      </div>
+      <div class="appbody" id="appBody">
+        <div id="banners" style="display:flex;flex-direction:column;gap:8px" role="region" aria-label="Alertes" aria-live="polite"></div>
+
+        <!-- Accueil -->
+        <section class="tab" id="tab-home">
+          <div class="card hero" id="hero" data-s="idle">
+            <div class="drop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.2 4.1 6 7 6 10.2A6 6 0 0 1 12 19a6 6 0 0 1-6-5.8C6 10 8.800 7.100 12 3z" fill="var(--water)"/></svg></div>
+            <div style="min-width:0">
+              <h2 id="heroT">Au repos</h2>
+              <p id="heroS"></p>
+              <div class="chips" id="heroChips"></div>
+            </div>
+          </div>
+          <div class="tiles">
+            <div class="tile" id="tTemp"><span class="lbl">Température · DHT11</span><span class="v" id="vTemp"></span><span class="s" id="sTemp"></span></div>
+            <div class="tile" id="tAir"><span class="lbl">Humidité de l'air · DHT11</span><span class="v" id="vAir"></span><span class="s" id="sAir"></span></div>
+            <div class="tile wide" id="tSoil">
+              <span class="lbl">Humidité du sol · zone d'irrigation</span>
+              <span class="v" id="vSoil"></span>
+              <div class="meter" id="soilMeter"><div class="band" id="soilBand"></div><div class="fill" id="soilFill"></div><div class="pin" id="soilPin"></div></div>
+              <div class="ml"><span id="mlMin"></span><span id="mlMax"></span></div>
+              <span class="s" id="sSoil"></span>
+            </div>
+            <div class="tile" id="tRain"><span class="lbl">Pluie</span><span class="v" id="vRain"></span><span class="s" id="sRain"></span></div>
+            <button type="button" class="tile" id="tSec" data-goto="sec" style="text-align:left;cursor:pointer"><span class="lbl">Sécurité du périmètre</span><span class="v" id="vSec"></span><span class="s" id="sSec"></span></button>
+          </div>
+          <div class="card"><h3>Réseau Wi-Fi</h3><div class="chips" id="netChips"></div><p class="lbl" id="syncNote" style="margin-top:8px">Mode local.</p></div>
+          <div class="card"><h3>Activité récente</h3><ul class="hist" id="recent"></ul></div>
+        </section>
+
+        <!-- Arrosage -->
+        <section class="tab" id="tab-water" hidden>
+          <div class="seg" id="modeSeg" role="group" aria-label="Mode de fonctionnement">
+            <button type="button" class="cmd" data-mode="manual" aria-pressed="false">Manuel</button>
+            <button type="button" class="cmd" data-mode="semi" aria-pressed="false">Semi-auto</button>
+            <button type="button" class="cmd" data-mode="auto" aria-pressed="true">Auto</button>
+          </div>
+          <div class="card" id="statusCard"><h3 id="modeTitle"></h3><p class="lbl" id="modeHint" style="margin-top:4px"></p><div class="chips" id="statusChips"></div></div>
+
+          <div id="pManual" hidden>
+            <div class="big">
+              <button type="button" class="bt cmd wide" id="btPump" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><b>Pompe du puits</b><span class="st"></span></button>
+              <button type="button" class="bt cmd" id="btValve" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M12 12V6m-4 0h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="8" y="12" width="8" height="6" rx="2" fill="currentColor"/></svg><b>Électrovanne EV1</b><span class="lbl">Rangs 1 à 3</span><span class="st"></span></button>
+              <button type="button" class="bt cmd" id="btValve2" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M12 12V6m-4 0h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="8" y="12" width="8" height="6" rx="2" fill="currentColor"/></svg><b>Électrovanne EV2</b><span class="lbl">Rangs 4 et 5</span><span class="st"></span></button>
+            </div>
+            <p class="empty-note">L'eau coule uniquement si la pompe tourne et qu'au moins une électrovanne est ouverte. La pluie arrête toujours l'arrosage.</p>
+          </div>
+
+          <div id="pSemi" hidden>
+            <div class="card">
+              <h3>Plages horaires</h3>
+              <div id="slots"></div>
+              <h3 style="margin-top:12px">Jours d'arrosage</h3>
+              <div class="days" id="days"></div>
+              <p class="empty-note" id="nextRun"></p>
+            </div>
+          </div>
+
+          <div id="pAuto">
+            <div class="card">
+              <h3>Seuils d'humidité du sol</h3>
+              <div class="meter" id="autoMeter"><div class="band" id="autoBand"></div><div class="fill" id="autoFill"></div><div class="pin" id="autoPin"></div></div>
+              <div class="ml" style="margin-bottom:12px"><span>0 %</span><span class="mono" id="autoNow"></span><span>100 %</span></div>
+              <div class="row"><div class="lab"><label for="sMin">MINI : l'arrosage démarre</label><output id="oMin"></output></div><input class="cmd" type="range" id="sMin" min="10" max="60" step="1"></div>
+              <div class="row"><div class="lab"><label for="sMax">MAXI : l'arrosage s'arrête</label><output id="oMax"></output></div><input class="cmd" type="range" id="sMax" min="40" max="95" step="1"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Sécurité -->
+        <section class="tab" id="tab-sec" hidden>
+          <div class="card">
+            <div class="sec-state"><h3>Capteur à ultrasons HC-SR04</h3><span class="pill" id="usPill"></span></div>
+            <p class="lbl" style="margin-top:2px">Fixé sur la clôture, il mesure la distance de l'objet le plus proche à l'extérieur.</p>
+            <div class="dist mono" id="usDist" style="margin-top:10px"></div>
+            <div class="meter" id="usMeter"><div class="fill" id="usFill" style="background:var(--ok)"></div><div class="pin" id="usThr" style="background:var(--crit)"></div></div>
+            <div class="ml"><span>0 cm (clôture)</span><span id="usThrTxt"></span><span>400 cm</span></div>
+            <div class="sec-state" style="margin-top:12px"><span>Surveillance du périmètre</span><label class="sw"><input class="cmd" type="checkbox" id="swArm" checked aria-label="Surveillance armée"><span></span></label></div>
+          </div>
+          <div class="card">
+            <div class="sec-state"><h3>Présence d'animaux</h3><span class="pill" id="aniPill"></span></div>
+            <p class="lbl" style="margin-top:2px" id="aniTxt"></p>
+            <div class="animals" id="aniRow" aria-hidden="true"></div>
+          </div>
+          <div class="card">
+            <div class="sec-state"><h3>Buzzer d'alarme</h3><span class="pill" id="bzPill"></span></div>
+            <p class="lbl" style="margin-top:2px" id="bzTxt"></p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:center">
+              <button type="button" class="btn primary cmd" id="btAck">Acquitter l'alarme</button>
+              <label class="chk" style="margin:0"><input class="cmd" type="checkbox" id="swSnd" checked> Son sur ce téléphone</label>
+            </div>
+          </div>
+          <div class="card"><h3>Historique des alertes</h3><ul class="hist" id="alertHist"></ul></div>
+        </section>
+      </div>
+      <nav class="tabbar" role="tablist" aria-label="Navigation">
+        <button type="button" role="tab" data-tab="home" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Accueil</button>
+        <button type="button" role="tab" data-tab="water" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3 4 6 6.800 6 10a6 6 0 0 1-12 0c0-3.200 3-6 6-10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>Arrosage</button>
+        <button type="button" role="tab" data-tab="sec" aria-selected="false"><span class="badge" id="secBadge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.500-3.400 8-8 9-4.600-1-8-4.500-8-9V6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>Sécurité</button>
+      </nav>
+    </div>
+  </section>
+
+  <section class="sim" aria-label="Banc de simulation">
+    <div>
+      <p class="col-title">La ferme simulée · vue de dessus</p>
+      <div class="scene-wrap" id="sceneWrap"><div class="scene-scroll">
+<svg id="scene" viewBox="0 0 980 540" role="img" aria-label="Plan de la ferme : puits et pompe, électrovannes EV1 et EV2, zone d'irrigation unique, enclos avec animaux, clôture, capteurs DHT11, sol, pluie et ultrasons">
+<rect width="980" height="540" fill="#6aa457"/>
+<g id="grassDots" fill="#5c9449" opacity=".55"></g>
+<rect x="60" y="40" width="640" height="470" fill="#76ad62"/>
+<!-- enclos -->
+<rect id="pen" x="90" y="380" width="590" height="110" rx="8" fill="#c9b27a" opacity=".55" stroke="#8a6a45" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="104" y="398" fill="#4a3a22" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11">enclos</text>
+<!-- zone d'irrigation -->
+<rect id="plot" x="260" y="90" width="300" height="250" rx="10" fill="#8a6a45" stroke="#3a2a1a" stroke-width="2"/>
+<path id="cracks" d="M280 100 l14 16 l-6 14 l12 10 M520 110 l-12 18 l10 12 M400 150 l16 8 l8 -10 M480 230 l-14 -8 M330 290 l12 6 l-4 10 M500 300 l-14 10 l6 12" fill="none" stroke="#3a2a1a" stroke-width="1.6" stroke-linecap="round" opacity="0"/>
+<g fill="none" stroke="#8c99a4" stroke-linecap="round">
+  <path d="M156 120 H172" stroke-width="7"/>
+  <path d="M220 120 H268 V220" stroke-width="7"/>
+  <path d="M232 120 V295 H268 M268 270 V320" stroke-width="7"/>
+  <g id="laterals" stroke-width="4"></g>
+</g>
+<g id="plants"></g>
+<path id="wSuction" class="water" d="M156 120 H172"/>
+<path id="wHead" class="water" d="M220 120 H232"/>
+<path id="wB1" class="water" d="M232 120 H268 V220"/>
+<path id="wB2" class="water" d="M232 120 V295 H268 M268 270 V320"/>
+<g id="wLat"></g>
+<!-- puits + pompe -->
+<circle cx="130" cy="120" r="27" fill="#9aa4ab" stroke="#5f6b73" stroke-width="3"/><circle cx="130" cy="120" r="17" fill="#2d6ea3"/><circle cx="130" cy="120" r="17" fill="none" stroke="#1d4a73" stroke-width="2"/>
+<text x="130" y="165" fill="#fff" stroke="#1b2330" stroke-width="3" paint-order="stroke" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" text-anchor="middle">puits</text>
+<rect x="172" y="96" width="48" height="48" rx="7" fill="#55677a" stroke="#2f3b46" stroke-width="2"/>
+<circle cx="196" cy="120" r="16" fill="#e6edf2"/>
+<g id="blades" class="spin" fill="#55677a"><rect x="194" y="106" width="4" height="14" rx="2"/><rect x="194" y="120" width="4" height="14" rx="2"/><rect x="182" y="118" width="14" height="4" rx="2"/><rect x="196" y="118" width="14" height="4" rx="2"/></g>
+<circle id="pumpLed" cx="212" cy="104" r="3.5" fill="#8a97a1"/>
+<!-- électrovanne -->
+<g transform="translate(250,120)"><rect id="vBody1" x="-9" y="-9" width="18" height="18" rx="4" fill="#8a97a1" stroke="#26323b" stroke-width="1.6"/><line id="vH1" x1="0" y1="-9" x2="8" y2="-15" stroke="#26323b" stroke-width="3" stroke-linecap="round"/><circle id="vC1" cx="8" cy="-15" r="3.4" fill="#26323b"/></g>
+<text x="250" y="148" fill="#fff" stroke="#1b2330" stroke-width="3" paint-order="stroke" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" text-anchor="middle">EV1</text>
+<g transform="translate(250,295)"><rect id="vBody2" x="-9" y="-9" width="18" height="18" rx="4" fill="#8a97a1" stroke="#26323b" stroke-width="1.6"/><line id="vH2" x1="0" y1="-9" x2="8" y2="-15" stroke="#26323b" stroke-width="3" stroke-linecap="round"/><circle id="vC2" cx="8" cy="-15" r="3.4" fill="#26323b"/></g>
+<text x="250" y="320" fill="#fff" stroke="#1b2330" stroke-width="3" paint-order="stroke" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" text-anchor="middle">EV2</text>
+<!-- sonde sol -->
+<g transform="translate(420,200)"><circle r="11" fill="#f3f6f7" stroke="#26323b" stroke-width="2"/><path d="M-4 -4 V5 M4 -4 V5" stroke="#d3aa4d" stroke-width="2.4" stroke-linecap="round"/><circle id="soilLed" cx="0" cy="-6" r="2.4" fill="#5be08a"/></g>
+<text x="552" y="103" fill="#fff" stroke="#3a2a1a" stroke-width="3" paint-order="stroke" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10.5" text-anchor="end">zone d'irrigation unique</text>
+<!-- DHT11 + pluie -->
+<g transform="translate(600,100)"><rect x="-9" y="-9" width="18" height="18" rx="3" fill="#f3f6f7" stroke="#26323b" stroke-width="1.6"/><path d="M-5 -3 H5 M-5 1 H5 M-5 5 H5" stroke="#9aa8b2" stroke-width="1.4"/></g>
+<g transform="translate(600,150) rotate(-10)"><rect x="-13" y="-8" width="26" height="16" rx="3" fill="#2a3a2e" stroke="#16201a"/><path d="M-9 -3 H9 M-9 3 H9" stroke="#d9b45a" stroke-width="1.3"/></g>
+<g id="plateDrops" opacity="0" fill="#7fc4ff"><circle cx="594" cy="145" r="2.4"/><circle cx="604" cy="152" r="2.4"/><circle cx="609" cy="144" r="2.2"/></g>
+<!-- Microcontrôleur + liaisons Wi-Fi -->
+<g id="links" class="links" fill="none" stroke="#1d8fb3" stroke-width="1.6" stroke-dasharray="4 4" opacity=".85">
+<path d="M130 214 Q160 160 212 112"/><path d="M180 232 Q215 190 248 130"/><path d="M180 266 Q210 300 240 297"/><path d="M180 243 Q300 230 408 204"/><path d="M180 238 Q400 60 590 100"/><path d="M180 250 Q400 190 588 148"/><path d="M180 262 Q450 300 694 250"/>
+</g>
+<g id="badges"></g>
+<rect x="80" y="214" width="100" height="58" rx="7" fill="#0f6b78" stroke="#07343b" stroke-width="2"/>
+<rect x="90" y="222" width="22" height="12" rx="2" fill="#8da7ad"/>
+<text x="130" y="258" fill="#fff" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" text-anchor="middle">Microcontrôleur</text>
+<circle id="mcuLed" class="led-blink" cx="166" cy="226" r="3.4" fill="#5be08a"/>
+<!-- clôture -->
+<g id="fence"></g>
+<!-- HC-SR04 sur la clôture -->
+<polygon id="cone" points="716,250 948,205 948,295" fill="#3aa0f0" opacity=".12"/>
+<g id="waves"><path class="wave" d="M722 238 q12 12 0 24"/><path class="wave" style="animation-delay:.6s" d="M722 238 q12 12 0 24"/><path class="wave" style="animation-delay:1.2s" d="M722 238 q12 12 0 24"/></g>
+<rect x="696" y="232" width="20" height="36" rx="3" fill="#2a6fb0" stroke="#173b60" stroke-width="1.6"/>
+<circle cx="709" cy="241" r="5.5" fill="#cfd8de" stroke="#173b60"/><circle cx="709" cy="241" r="2.4" fill="#173b60"/>
+<circle cx="709" cy="259" r="5.5" fill="#cfd8de" stroke="#173b60"/><circle cx="709" cy="259" r="2.4" fill="#173b60"/>
+<g id="buzzerG"><circle class="halo" cx="698" cy="212" r="9"/><circle cx="698" cy="212" r="9" fill="#333c45" stroke="#12181d" stroke-width="1.5"/><circle id="buzzFace" cx="698" cy="212" r="3.6" fill="#8a97a1"/></g>
+<line id="thrLine" x1="774" x2="774" y1="205" y2="295" stroke="#e0362f" stroke-width="1.8" stroke-dasharray="5 4"/>
+<text id="thrTxt" x="774" y="198" fill="#fff" stroke="#1b2330" stroke-width="3" paint-order="stroke" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11" text-anchor="middle">seuil</text>
+<!-- animaux -->
+<g id="animals"></g>
+<!-- visiteur -->
+<g id="visitor" class="visitor" transform="translate(900,250)">
+  <circle class="pulse-ring" r="16"/>
+  <ellipse cx="3" cy="0" rx="6" ry="12" id="vBodyFig" fill="#1b2330"/><circle cx="-4" cy="0" r="6" id="vHead" fill="#1b2330"/>
+  <path d="M0 -10 L-10 -14 M0 10 L-10 14" stroke="#1b2330" stroke-width="3.5" stroke-linecap="round" id="vArms"/>
+</g>
+<g id="rain" opacity="0"></g>
+<rect id="night" width="980" height="540" fill="#071029" opacity="0" pointer-events="none"/>
+<rect id="overcast" width="980" height="540" fill="#3b4752" opacity="0" pointer-events="none"/>
+<rect class="alarm-tint" width="980" height="540" pointer-events="none"/>
+<g id="labels"></g>
+</svg>
+      </div></div>
+    </div>
+
+    <div class="simcard">
+      <h3>Conditions simulées</h3>
+      <div class="simgrid">
+        <div id="simSliders"></div>
+        <div>
+          <p class="cap">Capteur de pluie</p>
+          <div class="seg" id="rainSeg" role="group" aria-label="Pluie" style="margin-bottom:12px">
+            <button type="button" data-rain="0" aria-pressed="true">Sec</button>
+            <button type="button" data-rain="1" aria-pressed="false">En cours de pluie</button>
+          </div>
+          <p class="cap">Jour de la semaine simulé</p>
+          <div class="days" id="simDays" style="margin:0 0 12px"></div>
+          <p class="cap">Vitesse de la simulation</p>
+          <div class="seg" id="speedSeg" role="group" aria-label="Vitesse" style="margin-bottom:12px">
+            <button type="button" data-sp="0" aria-pressed="false">Pause</button>
+            <button type="button" data-sp="1" aria-pressed="false">1 min/s</button>
+            <button type="button" data-sp="5" aria-pressed="true">5 min/s</button>
+            <button type="button" data-sp="20" aria-pressed="false">20 min/s</button>
+          </div>
+          <label class="chk"><input type="checkbox" id="cPhys" checked> Le sol évolue (séchage, arrosage, pluie)</label>
+          <label class="chk"><input type="checkbox" id="cLink" checked> Liaison Wi-Fi microcontrôleur et téléphone</label>
+          <button type="button" class="btn" id="btnReset" style="margin-top:6px">Réinitialiser</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var $$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
+var clamp=function(v,a,b){return Math.min(b,Math.max(a,v))};
+var PI=Math.PI;
+function hex(c){return [parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)]}
+function mix(a,b,t){t=clamp(t,0,1);var x=hex(a),y=hex(b);return '#'+[0,1,2].map(function(i){var v=Math.round(x[i]+(y[i]-x[i])*t);return (v<16?'0':'')+v.toString(16)}).join('')}
+function pad(n){return (n<10?'0':'')+n}
+function fmtT(m){m=((m%1440)+1440)%1440;return pad(Math.floor(m/60))+':'+pad(Math.floor(m%60))}
+function toMin(s){var p=(s||'0:0').split(':').map(Number);return (p[0]||0)*60+(p[1]||0)}
+function svgEl(tag,attrs){var e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(var k in attrs)e.setAttribute(k,attrs[k]);return e}
+var DAYSHORT=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+var DAYLET=[['L',1],['M',2],['M',3],['J',4],['V',5],['S',6],['D',0]];
+var DAYFULL=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+function fmtDate(d,long){try{return new Intl.DateTimeFormat('fr-FR',long?{weekday:'long',day:'numeric',month:'long'}:{weekday:'short',day:'numeric',month:'short'}).format(d)}catch(e){return DAYSHORT[d.getDay()]+' '+d.getDate()}}
+
+/* ---------- état ---------- */
+var now0=new Date();
+function initial(){var d=new Date(now0.getFullYear(),now0.getMonth(),now0.getDate());return {
+  date:d,time:7*60+30,speed:5,physics:true,online:true,
+  temp:27,air:55,soil:42,rain:false,rainFade:0,dist:260,thr:100,animals:5,
+  mode:'auto',tab:'home',req:{pump:false,v1:false,v2:false},min:30,max:60,autoOn:false,
+  slots:[{on:true,s:'06:00',e:'06:30'},{on:true,s:'18:00',e:'18:30'}],
+  days:{0:false,1:true,2:false,3:true,4:false,5:true,6:true},
+  armed:true,sound:true,alarm:{on:false,acked:false}
+}}
+var S=initial(),C,V,logs=[],prevEv=null;
+C={pumpReq:false,v1Req:false,v2Req:false,pump:false,v1:false,v2:false,valve:false,flow:false,deadhead:false,rain:false};
+var MODES={manual:'Mode manuel',semi:'Mode semi-automatique',auto:'Mode automatique'};
+var HINTS={
+  manual:"Vous commandez directement la pompe du puits et les électrovannes EV1 et EV2.",
+  semi:"L'arrosage démarre et s'arrête selon les plages horaires et les jours choisis.",
+  auto:"Le système arrose quand l'humidité du sol passe sous le MINI et s'arrête au MAXI."
+};
+function log(text,lvl){logs.unshift({t:fmtT(S.time),text:text,lvl:lvl||'info'});if(logs.length>80)logs.pop()}
+
+/* ---------- logique ---------- */
+function inSchedule(){
+  if(!S.days[S.date.getDay()])return false;
+  for(var i=0;i<S.slots.length;i++){var sl=S.slots[i];if(!sl.on)continue;var a=toMin(sl.s),b=toMin(sl.e),t=S.time;
+    if(a<b?(t>=a&&t<b):(t>=a||t<b))return true}
+  return false;
+}
+function compute(){
+  var pumpReq=false,v1Req=false,v2Req=false;
+  if(S.mode==='manual'){pumpReq=S.req.pump;v1Req=S.req.v1;v2Req=S.req.v2}
+  else if(S.mode==='auto'){
+    if(S.soil<S.min)S.autoOn=true;else if(S.soil>=S.max)S.autoOn=false;
+    pumpReq=v1Req=v2Req=S.autoOn;
+  }else{pumpReq=v1Req=v2Req=inSchedule()}
+  var rain=S.rain,pump=pumpReq&&!rain,v1=v1Req&&!rain,v2=v2Req&&!rain,valve=v1||v2;
+  C={pumpReq:pumpReq,v1Req:v1Req,v2Req:v2Req,valveReq:v1Req||v2Req,pump:pump,v1:v1,v2:v2,valve:valve,flow:pump&&valve,deadhead:pump&&!valve,rain:rain};
+}
+function physics(sm){
+  var evap=0.012+0.0016*Math.max(0,S.temp-15)+(100-S.air)*0.00006,v=S.soil-evap*sm;
+  if(C.flow)v+=0.30*((C.v1?0.6:0)+(C.v2?0.4:0))*(1-v/110)*sm;
+  if(S.rain)v+=0.25*(1-v/100)*sm;
+  S.soil=clamp(v,0,100);
+}
+function updateAlarm(){
+  var act=S.armed&&S.dist<S.thr;
+  if(!S.armed&&S.alarm.on){S.alarm.on=false;S.alarm.acked=false}
+  if(act&&!S.alarm.on){S.alarm.on=true;S.alarm.acked=false}
+  else if(!act&&S.alarm.on&&S.alarm.acked){S.alarm.on=false;S.alarm.acked=false}
+}
+function detect(){
+  var cur={pump:C.pump,v1:C.v1,v2:C.v2,rain:S.rain,alarm:S.alarm.on,mode:S.mode};
+  if(prevEv){
+    if(cur.rain!==prevEv.rain)log(cur.rain?'Pluie détectée : irrigation suspendue':'Fin de la pluie : irrigation autorisée',cur.rain?'info':'ok');
+    if(cur.pump!==prevEv.pump)log(cur.pump?'Pompe du puits démarrée':'Pompe du puits arrêtée','info');
+    if(cur.v1!==prevEv.v1)log('Électrovanne EV1 '+(cur.v1?'ouverte':'fermée'),'info');
+    if(cur.v2!==prevEv.v2)log('Électrovanne EV2 '+(cur.v2?'ouverte':'fermée'),'info');
+    if(cur.alarm!==prevEv.alarm)log(cur.alarm?'Intrusion détectée à '+Math.round(S.dist)+' cm de la clôture : buzzer activé':'Périmètre dégagé : alarme remise à zéro',cur.alarm?'crit':'ok');
+  }
+  prevEv=cur;
+}
+function snapshot(){return {temp:S.temp,air:S.air,soil:S.soil,rain:S.rain,dist:S.dist,animals:S.animals,pump:C.pump,v1:C.v1,v2:C.v2,valve:C.valve,flow:C.flow,deadhead:C.deadhead,pumpReq:C.pumpReq,alarmOn:S.alarm.on,acked:S.alarm.acked,armed:S.armed,sync:fmtT(S.time)}}
+V=snapshot();
+function step(dt){
+  var sm=dt*S.speed,prev=S.time;
+  S.time+=sm;
+  if(S.time>=1440){S.time-=1440;S.date=new Date(S.date.getFullYear(),S.date.getMonth(),S.date.getDate()+1)}
+  S.rainFade+=((S.rain?1:0)-S.rainFade)*Math.min(1,dt*3);
+  compute();
+  if(S.physics&&sm>0)physics(sm);
+  updateAlarm();detect();
+  if(S.online)V=snapshot();
+  moveAnimals(dt);
+}
+
+/* ---------- construction de la scène ---------- */
+var plants=[],animalEls=[];
+(function build(){
+  var g=$('#grassDots');for(var i=0;i<70;i++)g.appendChild(svgEl('circle',{cx:Math.round((i*173)%980),cy:Math.round((i*97)%540),r:3+(i%4)}));
+  var f=$('#fence');
+  f.appendChild(svgEl('rect',{x:60,y:40,width:640,height:470,fill:'none',stroke:'#7a5a38','stroke-width':5}));
+  f.appendChild(svgEl('rect',{x:60,y:40,width:640,height:470,fill:'none',stroke:'#c19a64','stroke-width':1.6}));
+  var pts=[];for(var x=60;x<=700;x+=40){pts.push([x,40]);pts.push([x,510])}for(var y=80;y<510;y+=40)if(Math.abs(y-250)>20){pts.push([60,y]);pts.push([700,y])}
+  pts.forEach(function(p){f.appendChild(svgEl('circle',{cx:p[0],cy:p[1],r:5,fill:'#5d4429',stroke:'#2f2113','stroke-width':1}))});
+  var lat=$('#laterals'),wl=$('#wLat');
+  [120,170,220,270,320].forEach(function(y){
+    lat.appendChild(svgEl('path',{d:'M268 '+y+' H548'}));
+    wl.appendChild(svgEl('path',{d:'M268 '+y+' H548','class':'water'}));
+    for(var x=288;x<=538;x+=25){var p=svgEl('g',{transform:'translate('+x+' '+y+')'});
+      p.appendChild(svgEl('circle',{r:8.5,fill:'#3fa34d',stroke:'#1f5f2a','stroke-width':1}));p.appendChild(svgEl('circle',{r:3,fill:'#8fd07a'}));
+      $('#plants').appendChild(p);plants.push(p)}
+  });
+  var an=$('#animals');
+  for(var i=0;i<8;i++){var a=svgEl('g',{});
+    a.appendChild(svgEl('ellipse',{cx:0,cy:0,rx:12,ry:8,fill:'#f1efe8',stroke:'#b9b4a4','stroke-width':1.2}));
+    a.appendChild(svgEl('circle',{cx:-13,cy:0,r:4.6,fill:'#3b3a38'}));
+    an.appendChild(a);animalEls.push({el:a,x:120+i*65,y:420+((i*37)%50),h:(i*0.9)%6.28,sp:10+(i%3)*4,t:0});}
+  var m=$('#rain');
+  for(var j=0;j<100;j++){var rx=Math.round(Math.random()*1060);var l=svgEl('line',{x1:rx,y1:0,x2:rx-5,y2:14,stroke:'#cfe6ff','stroke-width':1.4,'class':'rl'});
+    l.style.animationDelay=(-Math.random()).toFixed(2)+'s';l.style.animationDuration=(0.5+Math.random()*0.3).toFixed(2)+'s';m.appendChild(l)}
+  [[168,150],[222,168],[212,292],[300,226],[395,98],[390,190],[440,262]].forEach(function(p){var g3=svgEl('g',{});g3.appendChild(svgEl('circle',{cx:p[0],cy:p[1],r:8,fill:'#1d8fb3',stroke:'#fff','stroke-width':1.5}));g3.appendChild(svgEl('path',{d:'M'+(p[0]-4)+' '+(p[1]-1)+' q4 -4 8 0 M'+(p[0]-2.4)+' '+(p[1]+1.6)+' q2.4 -2.4 4.8 0',stroke:'#fff','stroke-width':1.3,fill:'none','stroke-linecap':'round'}));g3.appendChild(svgEl('circle',{cx:p[0],cy:p[1]+4,r:.9,fill:'#fff'}));$('#badges').appendChild(g3)});
+  var labs=[['zPump',150,76,196],['zValve',390,66,214],['zSoil',420,352,150],['zDHT',610,76,186],['zRain',610,176,130],['zUS',848,170,168],['zAni',176,368,150],['zMcu',130,292,214]];
+  var lg=$('#labels');
+  labs.forEach(function(p){var g2=svgEl('g',{id:p[0],'class':'zlab'});g2.appendChild(svgEl('rect',{x:p[1]-p[3]/2,y:p[2]-11,width:p[3],height:22,rx:7}));g2.appendChild(svgEl('text',{x:p[1],y:p[2]+0.5}));lg.appendChild(g2)});
+})();
+function zl(id,text,cls){var g=$('#'+id);g.querySelector('text').textContent=text;g.setAttribute('class','zlab'+(cls?' '+cls:''))}
+function moveAnimals(dt){
+  animalEls.forEach(function(a,i){
+    a.t-=dt;if(a.t<=0){a.t=1.5+Math.random()*3;a.h+=(Math.random()-0.5)*2.2;a.sp=Math.random()<0.3?0:8+Math.random()*10}
+    a.x+=Math.cos(a.h)*a.sp*dt;a.y+=Math.sin(a.h)*a.sp*dt;
+    if(a.x<108){a.x=108;a.h=Math.PI-a.h}if(a.x>664){a.x=664;a.h=Math.PI-a.h}
+    if(a.y<402){a.y=402;a.h=-a.h}if(a.y>478){a.y=478;a.h=-a.h}
+    a.el.setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+(a.h*180/PI).toFixed(0)+')');
+    a.el.style.display=i<S.animals?'':'none';
+  });
+}
+
+/* ---------- construction de l'appli ---------- */
+(function buildApp(){
+  var sl=$('#slots');
+  S.slots.forEach(function(s,i){
+    var d=document.createElement('div');d.className='slot';
+    d.innerHTML='<label class="sw"><input class="cmd" type="checkbox" id="sl'+i+'on" '+(s.on?'checked':'')+' aria-label="Plage '+(i+1)+' active"><span></span></label><div class="tm"><b>Plage '+(i+1)+'</b></div><span></span><div class="tm"><label class="lbl" for="sl'+i+'s">de</label><input class="cmd" type="time" id="sl'+i+'s" value="'+s.s+'"><label class="lbl" for="sl'+i+'e">à</label><input class="cmd" type="time" id="sl'+i+'e" value="'+s.e+'"></div>';
+    sl.appendChild(d);
+    d.querySelector('#sl'+i+'on').addEventListener('change',function(e){S.slots[i].on=e.target.checked;refresh()});
+    d.querySelector('#sl'+i+'s').addEventListener('change',function(e){if(e.target.value)S.slots[i].s=e.target.value;refresh()});
+    d.querySelector('#sl'+i+'e').addEventListener('change',function(e){if(e.target.value)S.slots[i].e=e.target.value;refresh()});
+  });
+  var dy=$('#days'),sd=$('#simDays');
+  DAYLET.forEach(function(p){
+    var b=document.createElement('button');b.type='button';b.className='cmd';b.textContent=p[0];b.setAttribute('data-d',p[1]);b.setAttribute('aria-label',DAYFULL[p[1]]);b.setAttribute('aria-pressed',!!S.days[p[1]]);
+    b.addEventListener('click',function(){S.days[p[1]]=!S.days[p[1]];refresh()});dy.appendChild(b);
+    var c=document.createElement('button');c.type='button';c.textContent=p[0];c.setAttribute('data-d',p[1]);c.setAttribute('aria-label','Aujourd’hui : '+DAYFULL[p[1]]);c.setAttribute('aria-pressed','false');
+    c.addEventListener('click',function(){var diff=p[1]-S.date.getDay();S.date=new Date(S.date.getFullYear(),S.date.getMonth(),S.date.getDate()+diff);refresh()});sd.appendChild(c);
+  });
+  var ar=$('#aniRow');for(var i=0;i<8;i++){ar.appendChild(document.createElement('i'))}
+})();
+
+var sliderDefs=[
+  {k:'temp',l:'Température ambiante (DHT11)',min:0,max:50,step:1,u:' °C',get:function(){return S.temp},set:function(v){S.temp=v}},
+  {k:'air',l:'Humidité de l’air (DHT11)',min:0,max:100,step:1,u:' %',get:function(){return S.air},set:function(v){S.air=v}},
+  {k:'soil',l:'Humidité du sol',min:0,max:100,step:1,u:' %',get:function(){return S.soil},set:function(v){S.soil=v}},
+  {k:'dist',l:'Visiteur : distance à la clôture (HC-SR04)',min:2,max:400,step:1,u:' cm',get:function(){return S.dist},set:function(v){S.dist=v}},
+  {k:'thr',l:'Seuil de détection',min:30,max:200,step:5,u:' cm',get:function(){return S.thr},set:function(v){S.thr=v}},
+  {k:'animals',l:'Animaux dans l’enclos',min:0,max:8,step:1,u:'',get:function(){return S.animals},set:function(v){S.animals=v}},
+  {k:'time',l:'Heure simulée',min:0,max:1439,step:1,u:'',fmt:fmtT,get:function(){return S.time},set:function(v){S.time=v}}
+];
+var sBox=$('#simSliders');
+sliderDefs.forEach(function(d){
+  var row=document.createElement('div');row.className='row';
+  row.innerHTML='<div class="lab"><label for="s_'+d.k+'">'+d.l+'</label><output id="o_'+d.k+'"></output></div><input type="range" id="s_'+d.k+'" min="'+d.min+'" max="'+d.max+'" step="'+d.step+'">';
+  sBox.appendChild(row);d.el=row.querySelector('input');d.out=row.querySelector('output');d.drag=false;d.last=0;
+  d.el.addEventListener('pointerdown',function(){d.drag=true});
+  d.el.addEventListener('input',function(){d.last=performance.now();d.set(+d.el.value);refresh()});
+});
+window.addEventListener('pointerup',function(){sliderDefs.forEach(function(d){d.drag=false;mm.drag=false;mx.drag=false})});
+window.addEventListener('pointercancel',function(){sliderDefs.forEach(function(d){d.drag=false;mm.drag=false;mx.drag=false})});
+var mm={el:$('#sMin'),drag:false,last:0},mx={el:$('#sMax'),drag:false,last:0};
+mm.el.addEventListener('pointerdown',function(){mm.drag=true});mx.el.addEventListener('pointerdown',function(){mx.drag=true});
+mm.el.addEventListener('input',function(){mm.last=performance.now();S.min=+mm.el.value;if(S.max<S.min+10)S.max=S.min+10;refresh()});
+mx.el.addEventListener('input',function(){mx.last=performance.now();S.max=+mx.el.value;if(S.min>S.max-10)S.min=S.max-10;refresh()});
+
+$$('#modeSeg button').forEach(function(b){b.addEventListener('click',function(){
+  var m=b.getAttribute('data-mode');if(m===S.mode||!S.online)return;S.mode=m;S.autoOn=S.soil<S.min;log('Commande Wi-Fi : '+MODES[m]+' activé','info');refresh()})});
+$$('.tabbar button').forEach(function(b){b.addEventListener('click',function(){S.tab=b.getAttribute('data-tab');refresh()})});
+document.addEventListener('click',function(e){
+  var t=e.target.closest&&e.target.closest('[data-goto]');if(t){S.tab=t.getAttribute('data-goto');refresh();return}
+  var a=e.target.closest&&e.target.closest('[data-act="ack"]');if(a)ack();
+});
+function ack(){if(!S.online||!S.alarm.on||S.alarm.acked)return;S.alarm.acked=true;log('Buzzer acquitté','info');refresh()}
+$('#btAck').addEventListener('click',ack);
+$('#btPump').addEventListener('click',function(){S.req.pump=!S.req.pump;log('Commande Wi-Fi : pompe '+(S.req.pump?'ON':'OFF'),'info');refresh()});
+$('#btValve').addEventListener('click',function(){S.req.v1=!S.req.v1;log('Commande Wi-Fi : électrovanne EV1 '+(S.req.v1?'ouverture':'fermeture'),'info');refresh()});
+$('#btValve2').addEventListener('click',function(){S.req.v2=!S.req.v2;log('Commande Wi-Fi : électrovanne EV2 '+(S.req.v2?'ouverture':'fermeture'),'info');refresh()});
+$('#swArm').addEventListener('change',function(e){S.armed=e.target.checked;log(S.armed?'Surveillance du périmètre armée':'Surveillance du périmètre désarmée','info');refresh()});
+$('#swSnd').addEventListener('change',function(e){S.sound=e.target.checked});
+$$('#rainSeg button').forEach(function(b){b.addEventListener('click',function(){S.rain=b.getAttribute('data-rain')==='1';refresh()})});
+$$('#speedSeg button').forEach(function(b){b.addEventListener('click',function(){S.speed=+b.getAttribute('data-sp');refresh()})});
+$('#cPhys').addEventListener('change',function(e){S.physics=e.target.checked});
+$('#cLink').addEventListener('change',function(e){S.online=e.target.checked;log(S.online?'Liaison Wi-Fi rétablie':'Liaison Wi-Fi perdue : le microcontrôleur continue en autonomie',S.online?'ok':'warn');if(S.online)V=snapshot();refresh()});
+$('#btnReset').addEventListener('click',function(){
+  var sp=S.speed;S=initial();S.speed=sp;logs=[];prevEv=null;S.autoOn=S.soil<S.min;
+  $('#cPhys').checked=true;$('#cLink').checked=true;$('#swArm').checked=true;$('#swSnd').checked=true;
+  [0,1].forEach(function(i){$('#sl'+i+'on').checked=true});$('#sl0s').value='06:00';$('#sl0e').value='06:30';$('#sl1s').value='18:00';$('#sl1e').value='18:30';
+  log('Simulation réinitialisée','info');compute();V=snapshot();refresh();
+});
+
+/* ---------- son (buzzer de l'application) ---------- */
+var ac=null,gain=null,osc=null;
+function initAudio(){if(ac){if(ac.state==='suspended')ac.resume();return}
+  try{ac=new (window.AudioContext||window.webkitAudioContext)();osc=ac.createOscillator();gain=ac.createGain();osc.type='square';osc.frequency.value=880;gain.gain.value=0;osc.connect(gain);gain.connect(ac.destination);osc.start()}catch(e){ac=null}}
+['pointerdown','keydown'].forEach(function(ev){window.addEventListener(ev,initAudio,{passive:true})});
+function buzz(){if(!ac||!gain)return;var ring=S.sound&&V.alarmOn&&!V.acked&&V.armed;var ph=Math.floor(performance.now()/250)%2;
+  if(ring)osc.frequency.setValueAtTime(ph?660:880,ac.currentTime);gain.gain.setTargetAtTime(ring?0.05:0,ac.currentTime,0.01)}
+
+/* ---------- rendu ---------- */
+var bannerSig='';
+function renderBanners(){
+  var a=[];
+  if(!S.online)a.push({c:'warn',m:'Hors ligne : les valeurs affichées datent de '+V.sync+'. Les commandes sont indisponibles.'});
+  if(V.rain)a.push({c:'info',m:'Irrigation suspendue en raison de la pluie'});
+  if(V.alarmOn)a.push({c:'crit',m:V.dist<S.thr?'Intrusion à la clôture : présence à '+Math.round(V.dist)+' cm'+(V.animals>0?'. Animaux présents dans l’enclos.':''):'Intrusion détectée : alarme non acquittée',btn:!V.acked&&S.online});
+  if(V.deadhead&&S.mode==='manual')a.push({c:'warn',m:'La pompe tourne alors qu’aucune électrovanne n’est ouverte'});
+  var sig=JSON.stringify(a);if(sig===bannerSig)return;bannerSig=sig;
+  var box=$('#banners');box.innerHTML='';
+  a.forEach(function(x){var d=document.createElement('div');d.className='banner '+x.c;d.setAttribute('role',x.c==='crit'?'alert':'status');
+    d.innerHTML='<span class="dot"></span><span class="m"></span>';d.querySelector('.m').textContent=x.m;
+    if(x.btn){var b=document.createElement('button');b.type='button';b.setAttribute('data-act','ack');b.textContent='Acquitter';d.appendChild(b)}
+    box.appendChild(d)});
+}
+function chipHTML(label,state,s){return '<span class="chip" data-s="'+s+'"><i></i>'+label+' · '+state+'</span>'}
+function setHTML(el,html){if(el._h!==html){el._h=html;el.innerHTML=html}}
+function setText(el,t){if(el._t!==t){el._t=t;el.textContent=t}}
+function listHTML(items,empty){return items.length?items.map(function(l){return '<li class="'+l.lvl+'"><time>'+l.t+'</time><span>'+l.text.replace(/</g,'&lt;')+'</span></li>'}).join(''):'<li class="info" style="opacity:.7"><time></time><span>'+empty+'</span></li>'}
+
+function renderApp(){
+  /* en-tête */
+  setText($('#aTime'),fmtT(S.time));var dl=fmtDate(S.date,true);setText($('#aDate'),dl.charAt(0).toUpperCase()+dl.slice(1));
+  var c=$('#aConn');setHTML(c,S.online?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0M5 12.500a10.500 10.500 0 0 1 14 0M8.500 16a5.500 5.500 0 0 1 7 0" fill="none" stroke="var(--ok)" stroke-width="2.200" stroke-linecap="round"/><circle cx="12" cy="19.500" r="1.600" fill="var(--ok)"/></svg>Connecté':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0M5 12.500a10.500 10.500 0 0 1 14 0M8.500 16a5.500 5.500 0 0 1 7 0" fill="none" stroke="var(--ink-2)" stroke-width="2.200" stroke-linecap="round" opacity=".5"/><path d="M4 4l16 16" stroke="var(--crit)" stroke-width="2.400" stroke-linecap="round"/></svg>Hors ligne');
+  c.className='conn'+(S.online?'':' off');
+  setText($('#aSync'),S.online?'Microcontrôleur · Wi-Fi · synchro à l’instant':'Dernière synchro '+V.sync);
+  renderBanners();
+  var tabs=['home','water','sec'];
+  tabs.forEach(function(t){$('#tab-'+t).hidden=S.tab!==t});
+  $$('.tabbar button').forEach(function(b){b.setAttribute('aria-selected',b.getAttribute('data-tab')===S.tab)});
+  $('#secBadge').className='badge'+(V.alarmOn?' on':'');
+  $$('.cmd').forEach(function(el){el.disabled=!S.online});
+  if(S.tab==='home')renderHome();else if(S.tab==='water')renderWater();else renderSec();
+}
+function irrState(){
+  if(V.rain&&V.pumpReq)return 'paused';
+  if(V.flow)return 'on';
+  return 'idle';
+}
+function renderHome(){
+  var nc=S.online?'on':'blocked',nv=S.online?'Wi-Fi':'hors ligne';
+  setHTML($('#netChips'),['Capteur sol','DHT11','Capteur pluie','HC-SR04','Électrovanne EV1','Électrovanne EV2','Pompe du puits','Buzzer'].map(function(n){return chipHTML(n,nv,nc)}).join(''));
+  var st=V.flow?'on':((V.rain&&V.pumpReq)?'paused':'idle');
+  $('#hero').setAttribute('data-s',st);
+  setText($('#heroT'),st==='on'?'Arrosage en cours':(st==='paused'?'Arrosage suspendu':(V.deadhead?'Pompe sans eau':'Au repos')));
+  setText($('#heroS'),st==='paused'?'Pluie détectée : priorité à l’arrêt d’urgence':(MODES[S.mode]+(S.mode==='auto'?' · MINI '+S.min+' % / MAXI '+S.max+' %':'')));
+  setHTML($('#heroChips'),chipHTML('Pompe du puits',V.pump?'ON':(V.pumpReq&&V.rain?'bloquée':'OFF'),V.pump?'on':(V.pumpReq&&V.rain?'blocked':'off'))+chipHTML('EV1',V.v1?'ouverte':'fermée',V.v1?'on':'off')+chipHTML('EV2',V.v2?'ouverte':'fermée',V.v2?'on':'off'));
+  setText($('#vTemp'),Math.round(V.temp)+' °C');setText($('#sTemp'),V.temp>=35?'Forte chaleur':(V.temp<8?'Froid':'Température normale'));
+  $('#tTemp').setAttribute('data-s',V.temp>=35?'warn':'');
+  setText($('#vAir'),Math.round(V.air)+' %');setText($('#sAir'),V.air<35?'Air sec':(V.air>80?'Air très humide':'Air confortable'));
+  var dry=V.soil<S.min;
+  setText($('#vSoil'),Math.round(V.soil)+' %');
+  $('#tSoil').setAttribute('data-s',V.soil<20?'crit':(dry?'warn':''));
+  setText($('#sSoil'),dry?'Sol sec : sous le MINI':(V.soil>=S.max?'Sol bien humide : au-dessus du MAXI':'Humidité dans la plage cible'));
+  $('#soilFill').style.width=clamp(V.soil,0,100)+'%';$('#soilPin').style.left=clamp(V.soil,0,100)+'%';
+  $('#soilBand').style.left=S.min+'%';$('#soilBand').style.width=(S.max-S.min)+'%';
+  setText($('#mlMin'),'MINI '+S.min+' %');setText($('#mlMax'),'MAXI '+S.max+' %');
+  setText($('#vRain'),V.rain?'Pluie':'Sec');setText($('#sRain'),V.rain?'Arrêt d’urgence actif':'Irrigation autorisée');
+  $('#tRain').setAttribute('data-s',V.rain?'info':'');
+  var alarm=V.alarmOn;
+  setText($('#vSec'),alarm?'ALERTE':(V.armed?'Calme':'Désarmée'));setText($('#sSec'),alarm?(V.acked?'Buzzer acquitté':'Buzzer en marche'):(V.armed?'Aucune intrusion':'Surveillance coupée'));
+  $('#tSec').setAttribute('data-s',alarm?'crit':(V.armed?'':'warn'));
+  setHTML($('#recent'),listHTML(logs.slice(0,5),'Aucun événement pour le moment'));
+}
+function nextRunText(){
+  if(inSchedule())return 'Plage en cours.';
+  var best=null;
+  for(var d=0;d<8&&!best;d++){var date=new Date(S.date.getFullYear(),S.date.getMonth(),S.date.getDate()+d);if(!S.days[date.getDay()])continue;
+    var ts=S.slots.filter(function(s){return s.on}).map(function(s){return toMin(s.s)}).sort(function(a,b){return a-b});
+    for(var i=0;i<ts.length;i++){if(d>0||ts[i]>S.time){best=fmtDate(date,false)+' à '+fmtT(ts[i]);break}}}
+  return best?'Prochain arrosage : '+best:'Aucun arrosage planifié : activez une plage et un jour.';
+}
+function renderWater(){
+  $$('#modeSeg button').forEach(function(b){b.setAttribute('aria-pressed',b.getAttribute('data-mode')===S.mode)});
+  $('#pManual').hidden=S.mode!=='manual';$('#pSemi').hidden=S.mode!=='semi';$('#pAuto').hidden=S.mode!=='auto';
+  setText($('#modeTitle'),MODES[S.mode]);setText($('#modeHint'),HINTS[S.mode]);
+  var why=V.rain?'pluie':'';
+  setHTML($('#statusChips'),chipHTML('Pompe du puits',V.pump?'ON':(V.pumpReq&&why?'bloquée':'OFF'),V.pump?'on':(V.pumpReq&&why?'blocked':'off'))+chipHTML('EV1',V.v1?'ouverte':'fermée',V.v1?'on':'off')+chipHTML('EV2',V.v2?'ouverte':'fermée',V.v2?'on':'off')+(V.rain?chipHTML('Pluie','arrêt d’urgence','blocked'):''));
+  function bt(id,req,eff,blocked){var b=$(id);b.setAttribute('aria-pressed',req);setText(b.querySelector('.st'),req?(eff?'Active':(blocked?'Demandée · bloquée par la pluie':'Demandée')):'Arrêtée')}
+  bt('#btPump',S.req.pump,V.pump,V.rain);bt('#btValve',S.req.v1,V.v1,V.rain);bt('#btValve2',S.req.v2,V.v2,V.rain);
+  $$('#days button').forEach(function(b){b.setAttribute('aria-pressed',!!S.days[b.getAttribute('data-d')])});
+  setText($('#nextRun'),nextRunText());
+  var now=performance.now();
+  if(!mm.drag&&now-mm.last>800&&document.activeElement!==mm.el)mm.el.value=S.min;if(!mx.drag&&now-mx.last>800&&document.activeElement!==mx.el)mx.el.value=S.max;
+  setText($('#oMin'),S.min+' %');setText($('#oMax'),S.max+' %');
+  $('#autoBand').style.left=S.min+'%';$('#autoBand').style.width=(S.max-S.min)+'%';
+  $('#autoFill').style.width=clamp(V.soil,0,100)+'%';$('#autoPin').style.left=clamp(V.soil,0,100)+'%';setText($('#autoNow'),'Sol : '+Math.round(V.soil)+' %');
+}
+function renderSec(){
+  var hit=V.armed&&V.dist<S.thr;
+  setText($('#usDist'),Math.round(V.dist)+' cm');
+  $('#usFill').style.width=(V.dist/4)+'%';$('#usFill').style.background=hit?'var(--crit)':'var(--ok)';$('#usThr').style.left=(S.thr/4)+'%';
+  setText($('#usThrTxt'),'Seuil '+S.thr+' cm');
+  var p=$('#usPill');setText(p,!V.armed?'Désarmé':(hit?'Intrusion':'Surveillance active'));p.className='pill '+(!V.armed?'off':(hit?'crit':'ok'));
+  $('#swArm').checked=S.armed;
+  var n=V.animals;
+  var ap=$('#aniPill');setText(ap,n>0?'Présents':'Aucun');ap.className='pill '+(n>0?'ok':'warn');
+  setText($('#aniTxt'),n>0?n+(n>1?' animaux présents':' animal présent')+' dans l’enclos, à l’intérieur de la clôture.':'Aucun animal dans l’enclos.');
+  $$('#aniRow i').forEach(function(el,i){el.className=i<n?'':'empty';el.style.display=i<Math.max(n,1)||i<5?'':'none'});
+  var ringing=V.alarmOn&&!V.acked;
+  var bp=$('#bzPill');setText(bp,ringing?'ALARME EN COURS':(V.alarmOn?'Acquittée':'Silencieux'));bp.className='pill '+(ringing?'crit':(V.alarmOn?'warn':'ok'));
+  setText($('#bzTxt'),ringing?'Le buzzer sonne : un visiteur est trop près de la clôture.':(V.alarmOn?'Alarme acquittée : elle se réinitialise quand le visiteur s’éloigne.':'Le buzzer se déclenche si un objet passe sous le seuil de distance.'));
+  $('#btAck').disabled=!(ringing&&S.online);
+  $('#swSnd').checked=S.sound;
+  setHTML($('#alertHist'),listHTML(logs.filter(function(l){return l.lvl==='crit'||(l.text.indexOf('Périmètre')===0)||l.text.indexOf('Buzzer')===0}).slice(0,8),'Aucune alerte enregistrée'));
+}
+function renderSim(){
+  var h=S.time/60,rf=S.rainFade;
+  var d=clamp(Math.sin(PI*(h-6)/12)*2.2,0,1);
+  $('#night').setAttribute('opacity',((1-d)*0.5).toFixed(2));$('#overcast').setAttribute('opacity',(rf*0.2).toFixed(2));
+  $('#rain').setAttribute('opacity',rf.toFixed(2));$('#plateDrops').setAttribute('opacity',rf.toFixed(2));
+  var hl=clamp((S.soil-12)/28,0,1);
+  $('#plot').setAttribute('fill',mix('#c9a870','#4e3925',S.soil/80));$('#cracks').setAttribute('opacity',clamp((32-S.soil)/20,0,1).toFixed(2));
+  $('#soilLed').setAttribute('fill',S.soil<S.min?'#f0b24a':'#5be08a');
+  var col=hl>=0.5?mix('#b6a03c','#3fa34d',(hl-0.5)*2):mix('#7a5c34','#b6a03c',hl*2),sc=(0.6+0.4*hl).toFixed(2);
+  if(renderSim.col!==col||renderSim.sc!==sc){renderSim.col=col;renderSim.sc=sc;plants.forEach(function(p,i){var ci=p.querySelectorAll('circle');ci[0].setAttribute('fill',col);ci[0].setAttribute('r',(8.5*sc).toFixed(1));ci[1].setAttribute('fill',mix(col,'#c9f2a8',0.5))})}
+  $('#wSuction').setAttribute('class','water'+(C.pump?' on':''));$('#wHead').setAttribute('class','water'+(C.flow?' on':''));
+  var f1=C.pump&&C.v1,f2=C.pump&&C.v2;$('#wB1').setAttribute('class','water'+(f1?' on':''));$('#wB2').setAttribute('class','water'+(f2?' on':''));
+  $$('#wLat path').forEach(function(p,i){p.setAttribute('class','water'+((i<3?f1:f2)?' on':''))});
+  $('#blades').setAttribute('class','spin'+(C.pump?' on':''));
+  $('#pumpLed').setAttribute('fill',C.pump?'#5be08a':(C.pumpReq?'#f0b24a':'#8a97a1'));
+  [1,2].forEach(function(n){var o=C['v'+n],rq=C['v'+n+'Req'];
+    $('#vBody'+n).setAttribute('fill',o?'#2ea36a':(rq&&C.rain?'#e0a02e':'#8a97a1'));
+    $('#vH'+n).setAttribute('x2',o?0:8);$('#vH'+n).setAttribute('y2',o?-18:-15);$('#vC'+n).setAttribute('cx',o?0:8);$('#vC'+n).setAttribute('cy',o?-18:-15)});
+  $('#mcuLed').setAttribute('fill',S.online?'#5be08a':'#ff6b62');$('#links').style.opacity=S.online?.85:.15;$$('#badges circle:first-child').forEach(function(c){c.setAttribute('fill',S.online?'#1d8fb3':'#c0463f')});
+  /* visiteur */
+  var vx=716+S.dist*0.58+10;var vis=$('#visitor');vis.setAttribute('transform','translate('+vx.toFixed(0)+',250)');vis.style.opacity=S.dist<=400?1:0;
+  var hit=S.alarm.on;var fill=hit?'#e0362f':'#1b2330';['vBodyFig','vHead'].forEach(function(id){$('#'+id).setAttribute('fill',fill)});$('#vArms').setAttribute('stroke',fill);
+  var tx=716+S.thr*0.58;$('#thrLine').setAttribute('x1',tx);$('#thrLine').setAttribute('x2',tx);$('#thrTxt').setAttribute('x',tx);
+  $('#thrLine').style.opacity=S.armed?1:0.25;$('#thrTxt').style.opacity=S.armed?1:0.25;
+  var ringing=S.alarm.on&&!S.alarm.acked;
+  $('#scene').setAttribute('class',ringing?'ringing':'');$('#sceneWrap').className='scene-wrap'+(ringing?' alarm':'');
+  $('#buzzFace').setAttribute('fill',ringing?'#ff3b30':'#8a97a1');
+  zl('zPump','Pompe du puits · '+(C.pump?'ON':(C.pumpReq&&C.rain?'BLOQUÉE':'OFF')),C.pump?'ok':(C.pumpReq&&C.rain?'warn':''));
+  zl('zValve','EV1 '+(C.v1?'ouverte':'fermée')+' · EV2 '+(C.v2?'ouverte':'fermée')+(C.valveReq&&C.rain?' · pluie':''),C.valve?'ok':(C.valveReq&&C.rain?'warn':''));
+  zl('zSoil','Sol · '+Math.round(S.soil)+' %',S.soil<S.min?'warn':'');
+  zl('zDHT','DHT11 · '+Math.round(S.temp)+' °C · '+Math.round(S.air)+' %','');
+  zl('zRain','Pluie · '+(S.rain?'oui':'non'),S.rain?'warn':'');
+  zl('zUS','HC-SR04 · '+Math.round(S.dist)+' cm',S.alarm.on?'crit':'');
+  zl('zAni','Animaux · '+S.animals,'');
+  zl('zMcu','Microcontrôleur · '+(S.online?'Wi-Fi ok':'Wi-Fi coupé'),S.online?'':'warn');
+  /* curseurs */
+  var now=performance.now();
+  sliderDefs.forEach(function(dd){var v=dd.get();if(!dd.drag&&now-dd.last>800)dd.el.value=Math.round(v);dd.out.textContent=dd.fmt?dd.fmt(v):Math.round(v)+dd.u});
+  $$('#rainSeg button').forEach(function(b){b.setAttribute('aria-pressed',(b.getAttribute('data-rain')==='1')===S.rain)});
+  $$('#speedSeg button').forEach(function(b){b.setAttribute('aria-pressed',+b.getAttribute('data-sp')===S.speed)});
+  $$('#simDays button').forEach(function(b){b.setAttribute('aria-pressed',+b.getAttribute('data-d')===S.date.getDay())});
+  /* icône jour / nuit */
+  var ci=$('#clockIcon'),k=d<0.4?'n':'d';
+  if(ci._k!==k){ci._k=k;ci.innerHTML=k==='n'?'<path d="M20 14.500A8 8 0 0 1 9.500 4a8 8 0 1 0 10.500 10.500z" fill="var(--ink-2)"/>':'<circle cx="12" cy="12" r="4.500" fill="#f0b24a"/><g stroke="#f0b24a" stroke-width="2" stroke-linecap="round"><path d="M12 2.500v2.200M12 19.300v2.200M2.500 12h2.200M19.300 12h2.200M5.300 5.300l1.600 1.600M17.100 17.100l1.600 1.600M18.700 5.300l-1.600 1.600M6.900 17.100l-1.600 1.600"/></g>'}
+}
+function render(){renderApp();renderSim();buzz()}
+function refresh(){compute();updateAlarm();detect();if(S.online)V=snapshot();render();sharePush()}
+
+var last=performance.now();
+setInterval(function(){var n=performance.now(),dt=Math.min(0.5,(n-last)/1000);last=n;step(dt);render()},100);
+/* ---------- synchronisation partagée (tous les visiteurs du lien) ---------- */
+var shDoc=null,shReady=false,shLast='',shTimer=null,shPend=null;
+function shPick(o){return {mode:o.mode,req:{pump:!!(o.req&&o.req.pump),v1:!!(o.req&&o.req.v1),v2:!!(o.req&&o.req.v2)},min:+o.min,max:+o.max,armed:!!o.armed,rain:!!o.rain,thr:+o.thr,dist:+o.dist,temp:+o.temp,air:+o.air,animals:+o.animals,acked:!!o.acked,
+  slots:[0,1].map(function(i){var q=(o.slots&&o.slots[i])||{};return {on:!!q.on,s:q.s||'00:00',e:q.e||'00:00'}}),
+  days:[0,1,2,3,4,5,6].map(function(i){return !!(o.days&&o.days[i])})}}
+function shLocal(){var o={};for(var k in S)o[k]=S[k];o.acked=S.alarm.on&&S.alarm.acked;return shPick(o)}
+function shAnyDrag(){return sliderDefs.some(function(d){return d.drag})||mm.drag||mx.drag}
+function sharePush(){
+  if(!shDoc||!shReady)return;
+  var j=JSON.stringify(shLocal());if(j===shLast)return;
+  clearTimeout(shTimer);
+  shTimer=setTimeout(function(){var cur=shLocal(),cj=JSON.stringify(cur);if(cj===shLast)return;shLast=cj;shDoc.set(cur).catch(function(){setText($('#syncNote'),'Lecture seule : vos changements ne sont pas partagés.')})},250);
+}
+function shApply(raw){
+  var d=shPick(raw);var j=JSON.stringify(d);
+  if(j===JSON.stringify(shLocal())){shLast=j;return}
+  if(shAnyDrag()){shPend=raw;return}
+  shLast=j;
+  ['mode','min','max','armed','rain','thr','dist','temp','air','animals'].forEach(function(k){S[k]=d[k]});
+  S.req={pump:d.req.pump,v1:d.req.v1,v2:d.req.v2};
+  S.slots=d.slots;S.days={};d.days.forEach(function(v,i){S.days[i]=v});
+  if(d.acked&&S.alarm.on)S.alarm.acked=true;
+  $('#swArm').checked=S.armed;
+  [0,1].forEach(function(i){$('#sl'+i+'on').checked=S.slots[i].on;$('#sl'+i+'s').value=S.slots[i].s;$('#sl'+i+'e').value=S.slots[i].e});
+  S.autoOn=S.soil<S.min;
+  compute();updateAlarm();detect();if(S.online)V=snapshot();render();
+}
+window.addEventListener('pointerup',function(){if(shPend){var r=shPend;shPend=null;setTimeout(function(){shApply(r)},0)}});
+(async function(){
+  try{
+    var db=await claude.use('db');
+    if(!db){setText($('#syncNote'),'Mode local : connectez-vous pour partager l’état en direct.');return}
+    shDoc=db.doc('farm/state');
+    shDoc.onSnapshot(function(snap){
+      if(snap.exists){shApply(snap.data())}else{shLast=JSON.stringify(shLocal())}
+      shReady=true;setText($('#syncNote'),'Synchronisé en direct avec tous les visiteurs du lien.');
+    },function(){setText($('#syncNote'),'Mode local : synchronisation indisponible.')});
+  }catch(e){setText($('#syncNote'),'Mode local : synchronisation indisponible.')}
+})();
+log('Application connectée au microcontrôleur par Wi-Fi','ok');
+refresh();
+})();
+</script>
+
+</body>
+</html>
